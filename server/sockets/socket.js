@@ -1,0 +1,56 @@
+const { io } = require('../server');
+
+const { Personas } = require('../classes/personas');
+
+const { crearMensaje } = require('../util/util');
+
+let personasChat = new Personas();
+
+io.on('connection', (client) => {
+
+    console.log('Se conecto con el servidor');
+
+    client.on('entrarChat', (data, callback) => {
+
+        if (!data.nombre || !data.sala) {
+            callback({
+                error: 'ok',
+                mensaje: 'Falta pasar nombre/sala como parametro'
+            });
+        }
+
+        client.join(data.sala);
+
+        let personas = personasChat.agregarPersonas(client.id, data.nombre, data.sala);
+
+        client.broadcast.to(data.sala).emit('listaPersonas', personasChat.getPeronasSala(data.sala));
+
+        callback(personasChat.getPeronasSala(data.sala));
+
+    });
+
+    client.on('crearMensaje', (data) => {
+
+        let persona = personasChat.getPersona(client.id);
+
+        let mensaje = crearMensaje(persona.nombre, data.mensaje);
+
+        client.broadcast.to(persona.sala).emit('crearMensaje', mensaje);
+    });
+
+    client.on('mensajePrivado', (data) => {
+
+        let persona = personasChat.getPersona(client.id);
+
+        client.broadcast.to(data.id).emit('mensajePrivado', crearMensaje(persona.nombre, data.mensaje));
+
+    });
+
+    client.on('disconnect', () => {
+        let personaborrada = personasChat.borrarPersona(client.id);
+        let sala = personaborrada.sala;
+        client.broadcast.to(sala).emit('crearMensaje', crearMensaje('Administrador', `${personaborrada.nombre} salio`));
+        client.broadcast.to(sala).emit('listaPersonas', personasChat.getPeronasSala(sala));
+    });
+
+});
